@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>멘델레예프 다이스 시뮬레이터</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #1a202c;
+            --bg-card: #2d3748;
+            --bg-board: #0e1218;
+            --border-color: #4a5568;
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --accent-cyan: #2dd4bf;
+            --accent-amber: #fbbF24;
+            --group-alkali-metal: #fca5a5;
+            --group-alkaline-earth-metal: #fdba74;
+            --group-lanthanide: #fde68a;
+            --group-actinide: #d9f99d;
+            --group-transition-metal: #a5f3fc;
+            --group-post-transition-metal: #a7f3d0;
+            --group-metalloid: #bfdbfe;
+            --group-other-nonmetal: #c7d2fe;
+            --group-halogen: #e9d5ff;
+            --group-noble-gas: #fbcfe8;
+            --group-unknown: #9ca3af;
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+        .periodic-table-grid {
+            display: grid;
+            grid-template-columns: repeat(18, minmax(0, 1fr));
+            gap: 4px;
+        }
+        .element-cell {
+            aspect-ratio: 1 / 1;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+            cursor: default;
+            color: #1a202c;
+        }
+        .element-cell.group-alkali-metal { background-color: var(--group-alkali-metal); }
+        .element-cell.group-alkaline-earth-metal { background-color: var(--group-alkaline-earth-metal); }
+        .element-cell.group-lanthanide { background-color: var(--group-lanthanide); }
+        .element-cell.group-actinide { background-color: var(--group-actinide); }
+        .element-cell.group-transition-metal { background-color: var(--group-transition-metal); }
+        .element-cell.group-post-transition-metal { background-color: var(--group-post-transition-metal); }
+        .element-cell.group-metalloid { background-color: var(--group-metalloid); }
+        .element-cell.group-other-nonmetal { background-color: var(--group-other-nonmetal); }
+        .element-cell.group-halogen { background-color: var(--group-halogen); }
+        .element-cell.group-noble-gas { background-color: var(--group-noble-gas); }
+        .element-cell.group-unknown { background-color: var(--group-unknown); }
+        
+        .element-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+        .element-cell.producible {
+            outline: 2px solid var(--accent-amber);
+            box-shadow: 0 0 10px var(--accent-amber);
+        }
+        .element-cell.explosion-choice {
+            cursor: pointer;
+            outline: 2px solid var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+        .element-number { font-size: 0.6rem; }
+        .element-symbol { font-size: 0.9rem; font-weight: 700; text-align: center; }
+        .element-name { font-size: 0.5rem; text-align: center; color: #4a5568; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .cube-container {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            display: flex;
+            gap: 2px;
+        }
+        .cube {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            border: 1px solid rgba(0,0,0,0.7);
+        }
+        .cube-red { background-color: #ef4444; } .cube-blue { background-color: #3b82f6; }
+        .cube-green { background-color: #22c55e; } .cube-yellow { background-color: #eab308; }
+        .cube-purple { background-color: #a855f7; } .cube-pink { background-color: #ec4899; }
+
+        .player-card.active {
+            border-color: var(--accent-amber);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+        }
+        
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            z-index: 40; display: flex; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background-color: var(--bg-card); border: 1px solid var(--border-color);
+            padding: 2rem; border-radius: 0.5rem; max-width: 90vw; max-height: 90vh;
+            overflow-y: auto; z-index: 50; color: var(--text-primary);
+        }
+        .modal-content select {
+            color: black;
+        }
+        .tech-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; border-radius: 50%; font-weight: bold;
+            color: white; margin-right: 4px;
+        }
+        .tech-multiply { background-color: #dc2626; } .tech-concat { background-color: #2563eb; }
+        .tech-slide { background-color: #16a34a; } .tech-outsource { background-color: #f59e0b; }
+        
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 700;
+            transition: all 0.2s;
+            background-image: linear-gradient(to top, rgba(0,0,0,0.2), transparent);
+        }
+        .btn-primary { background-color: var(--accent-cyan); color: var(--bg-dark); }
+        .btn-primary:hover { background-color: #5eead4; }
+        .btn-secondary { background-color: var(--border-color); color: var(--text-primary); }
+        .btn-secondary:hover { background-color: #718096; }
+        .btn:disabled { background-color: #4a5568; color: #718096; cursor: not-allowed; background-image: none; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+
+        /* Scoreboard Styles */
+        #scoreboard-track {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            gap: 2px;
+            position: relative;
+        }
+        .score-cell {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 700;
+            padding: 4px 0;
+            position: relative;
+        }
+        .score-cell.dice-reward { color: var(--accent-amber); }
+        .score-cell.tech-reward { background-color: #111827; color: white; }
+        .score-cell.tech-reward.dice-reward { color: var(--accent-amber); }
+        .player-token {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            transition: all 0.5s ease-in-out;
+            z-index: 15;
+        }
+    </style>
+</head>
+<body class="bg-bg-dark text-text-primary">
+
+    <div id="app" class="container mx-auto p-4 min-h-screen">
+        
+        <header class="text-center mb-4">
+            <h1 class="text-4xl font-bold text-accent-cyan">🎲 멘델레예프 다이스</h1>
+            <p id="game-status" class="text-lg text-text-secondary mt-2">게임을 시작해주세요.</p>
+        </header>
+
+        <div id="scoreboard-panel" class="mb-4 p-3 bg-bg-board border border-border-color rounded-lg shadow-lg"></div>
+
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <aside id="players-panel" class="lg:col-span-2 space-y-4"></aside>
+
+            <div id="center-panel" class="lg:col-span-5">
+                <div id="periodic-table-container" class="bg-bg-board p-3 rounded-lg shadow-lg"></div>
+                <div id="controls-panel" class="mt-4 p-4 bg-bg-card border border-border-color rounded-lg shadow-lg text-center"></div>
+                <div id="tech-track-panel" class="mt-4 p-4 bg-bg-card border border-border-color rounded-lg shadow-lg"></div>
+            </div>
+
+            <aside id="market-panel" class="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-xl font-bold text-accent-amber mb-2">기본 화합물 시장</h3>
+                    <div id="basic-market" class="grid grid-cols-1 gap-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-fuchsia-400 mb-2">고급 화합물 시장</h3>
+                    <div id="advanced-market" class="grid grid-cols-1 gap-3"></div>
+                </div>
+            </aside>
+
+        </main>
+    </div>
+
+    <div id="setup-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">게임 설정</h2>
+            <label class="block mb-2 text-text-secondary">플레이어 수:</label>
+            <div id="player-count-selector" class="flex justify-center gap-2 mb-6"></div>
+            <button id="start-game-btn" class="w-full btn btn-primary" disabled>게임 시작!</button>
+        </div>
+    </div>
+
+    <div id="calculation-modal" class="modal-backdrop hidden">
+        <div class="modal-content w-full max-w-lg">
+            <h2 class="text-2xl font-bold mb-4">⚛️ 원자번호 계산</h2>
+            <div id="calc-player-name" class="font-bold mb-2 text-accent-cyan"></div>
+            <p class="mb-4 text-text-secondary">굴린 주사위 눈:</p>
+            <div id="dice-roll-results" class="flex flex-wrap gap-2 mb-4"></div>
+            <div class="space-y-4">
+                <div>
+                    <h3 class="font-bold">방법 1: 주사위 1개 선택</h3>
+                    <div id="single-dice-options" class="flex flex-wrap gap-2 mt-2"></div>
+                </div>
+                <div>
+                    <h3 class="font-bold">방법 2: 주사위 2개 연산</h3>
+                    <div class="flex items-center gap-2 flex-wrap bg-bg-dark p-3 rounded-md">
+                        <select id="calc-dice-1" class="p-2 border border-border-color bg-white rounded"></select>
+                        <select id="calc-op" class="p-2 border border-border-color bg-white rounded"></select>
+                        <select id="calc-dice-2" class="p-2 border border-border-color bg-white rounded"></select>
+                        <span class="font-bold text-lg text-text-secondary">=</span>
+                        <span id="calc-result" class="font-bold text-lg w-12 text-center text-accent-amber">?</span>
+                    </div>
+                    <p id="calc-error" class="text-red-400 text-sm h-5 mt-1"></p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-between items-center">
+                <button id="view-market-calc-btn" class="btn btn-secondary">시장 보기</button>
+                <button id="confirm-production-btn" class="btn btn-primary" disabled>이 원소로 생산</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="choice-modal" class="modal-backdrop hidden">
+        <div class="modal-content text-center">
+            <h2 id="choice-title" class="text-xl font-bold mb-4"></h2>
+            <div id="choice-options" class="flex flex-wrap justify-center gap-3"></div>
+            <div class="mt-6">
+                <button id="view-market-choice-btn" class="btn btn-secondary">시장 보기</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2 class="text-3xl font-bold mb-4 text-center text-accent-amber">🏆 게임 종료! 🏆</h2>
+            <div id="final-scores" class="space-y-2"></div>
+            <div class="text-center mt-6">
+                <button onclick="location.reload()" class="btn btn-primary">새 게임 시작</button>
+            </div>
+        </div>
+    </div>
+    
+    <button id="toggle-dev-panel" class="fixed bottom-2 left-2 text-2xl bg-bg-card p-2 rounded-full shadow-lg z-30">🛠️</button>
+    <div id="dev-panel" class="fixed bottom-14 left-2 bg-gray-900 p-3 border border-border-color rounded-lg text-xs space-y-2 z-30 hidden">
+        <h4 class="font-bold text-center">개발자 도구</h4>
+        <button id="dev-add-score" class="btn btn-secondary btn-sm w-full">+5점</button>
+        <button id="dev-add-die" class="btn btn-secondary btn-sm w-full">주사위+</button>
+        <button id="dev-add-tech" class="btn btn-secondary btn-sm w-full">기술+</button>
+        <div class="flex gap-1">
+            <input type="number" id="dev-element-num" class="w-16 bg-bg-dark border border-border-color rounded p-1" placeholder="원자번호">
+            <button id="dev-add-cube" class="btn btn-secondary btn-sm flex-grow">큐브+</button>
+        </div>
+    </div>
+
+    <button id="return-to-modal-btn" class="fixed bottom-4 left-1/2 -translate-x-1/2 btn btn-primary z-40 hidden">팝업으로 돌아가기</button>
+
+<script>
+// DATA
+const periodicTableData = [null,{number:1,symbol:"H",name:"수소",group:"other-nonmetal"},{number:2,symbol:"He",name:"헬륨",group:"noble-gas"},{number:3,symbol:"Li",name:"리튬",group:"alkali-metal"},{number:4,symbol:"Be",name:"베릴륨",group:"alkaline-earth-metal"},{number:5,symbol:"B",name:"붕소",group:"metalloid"},{number:6,symbol:"C",name:"탄소",group:"other-nonmetal"},{number:7,symbol:"N",name:"질소",group:"other-nonmetal"},{number:8,symbol:"O",name:"산소",group:"other-nonmetal"},{number:9,symbol:"F",name:"플루오린",group:"halogen"},{number:10,symbol:"Ne",name:"네온",group:"noble-gas"},{number:11,symbol:"Na",name:"나트륨",group:"alkali-metal"},{number:12,symbol:"Mg",name:"마그네슘",group:"alkaline-earth-metal"},{number:13,symbol:"Al",name:"알루미늄",group:"post-transition-metal"},{number:14,symbol:"Si",name:"규소",group:"metalloid"},{number:15,symbol:"P",name:"인",group:"other-nonmetal"},{number:16,symbol:"S",name:"황",group:"other-nonmetal"},{number:17,symbol:"Cl",name:"염소",group:"halogen"},{number:18,symbol:"Ar",name:"아르곤",group:"noble-gas"},{number:19,symbol:"K",name:"칼륨",group:"alkali-metal"},{number:20,symbol:"Ca",name:"칼슘",group:"alkaline-earth-metal"},{number:21,symbol:"Sc",name:"스칸듐",group:"transition-metal"},{number:22,symbol:"Ti",name:"티타늄",group:"transition-metal"},{number:23,symbol:"V",name:"바나듐",group:"transition-metal"},{number:24,symbol:"Cr",name:"크로뮴",group:"transition-metal"},{number:25,symbol:"Mn",name:"망가니즈",group:"transition-metal"},{number:26,symbol:"Fe",name:"철",group:"transition-metal"},{number:27,symbol:"Co",name:"코발트",group:"transition-metal"},{number:28,symbol:"Ni",name:"니켈",group:"transition-metal"},{number:29,symbol:"Cu",name:"구리",group:"transition-metal"},{number:30,symbol:"Zn",name:"아연",group:"transition-metal"},{number:31,symbol:"Ga",name:"갈륨",group:"post-transition-metal"},{number:32,symbol:"Ge",name:"저마늄",group:"metalloid"},{number:33,symbol:"As",name:"비소",group:"metalloid"},{number:34,symbol:"Se",name:"셀레늄",group:"other-nonmetal"},{number:35,symbol:"Br",name:"브로민",group:"halogen"},{number:36,symbol:"Kr",name:"크립톤",group:"noble-gas"},{number:37,symbol:"Rb",name:"루비듐",group:"alkali-metal"},{number:38,symbol:"Sr",name:"스트론튬",group:"alkaline-earth-metal"},{number:39,symbol:"Y",name:"이트륨",group:"transition-metal"},{number:40,symbol:"Zr",name:"지르코늄",group:"transition-metal"},{number:41,symbol:"Nb",name:"나이오븀",group:"transition-metal"},{number:42,symbol:"Mo",name:"몰리브데넘",group:"transition-metal"},{number:43,symbol:"Tc",name:"테크네튬",group:"transition-metal"},{number:44,symbol:"Ru",name:"루테늄",group:"transition-metal"},{number:45,symbol:"Rh",name:"로듐",group:"transition-metal"},{number:46,symbol:"Pd",name:"팔라듐",group:"transition-metal"},{number:47,symbol:"Ag",name:"은",group:"transition-metal"},{number:48,symbol:"Cd",name:"카드뮴",group:"transition-metal"},{number:49,symbol:"In",name:"인듐",group:"post-transition-metal"},{number:50,symbol:"Sn",name:"주석",group:"post-transition-metal"},{number:51,symbol:"Sb",name:"안티모니",group:"metalloid"},{number:52,symbol:"Te",name:"텔루륨",group:"metalloid"},{number:53,symbol:"I",name:"아이오딘",group:"halogen"},{number:54,symbol:"Xe",name:"제논",group:"noble-gas"},{number:55,symbol:"Cs",name:"세슘",group:"alkali-metal"},{number:56,symbol:"Ba",name:"바륨",group:"alkaline-earth-metal"},{number:57,symbol:"La",name:"란타넘",group:"lanthanide"},{number:58,symbol:"Ce",name:"세륨",group:"lanthanide"},{number:59,symbol:"Pr",name:"프라세오디뮴",group:"lanthanide"},{number:60,symbol:"Nd",name:"네오디뮴",group:"lanthanide"},{number:61,symbol:"Pm",name:"프로메튬",group:"lanthanide"},{number:62,symbol:"Sm",name:"사마륨",group:"lanthanide"},{number:63,symbol:"Eu",name:"유로퓸",group:"lanthanide"},{number:64,symbol:"Gd",name:"가돌리늄",group:"lanthanide"},{number:65,symbol:"Tb",name:"터븀",group:"lanthanide"},{number:66,symbol:"Dy",name:"디스프로슘",group:"lanthanide"},{number:67,symbol:"Ho",name:"홀뮴",group:"lanthanide"},{number:68,symbol:"Er",name:"어븀",group:"lanthanide"},{number:69,symbol:"Tm",name:"툴륨",group:"lanthanide"},{number:70,symbol:"Yb",name:"이터븀",group:"lanthanide"},{number:71,symbol:"Lu",name:"루테튬",group:"lanthanide"},{number:72,symbol:"Hf",name:"하프늄",group:"transition-metal"},{number:73,symbol:"Ta",name:"탄탈럼",group:"transition-metal"},{number:74,symbol:"W",name:"텅스텐",group:"transition-metal"},{number:75,symbol:"Re",name:"레늄",group:"transition-metal"},{number:76,symbol:"Os",name:"오스뮴",group:"transition-metal"},{number:77,symbol:"Ir",name:"이리듐",group:"transition-metal"},{number:78,symbol:"Pt",name:"백금",group:"transition-metal"},{number:79,symbol:"Au",name:"금",group:"transition-metal"},{number:80,symbol:"Hg",name:"수은",group:"transition-metal"},{number:81,symbol:"Tl",name:"탈륨",group:"post-transition-metal"},{number:82,symbol:"Pb",name:"납",group:"post-transition-metal"},{number:83,symbol:"Bi",name:"비스무트",group:"post-transition-metal"},{number:84,symbol:"Po",name:"폴로늄",group:"post-transition-metal"},{number:85,symbol:"At",name:"아스타틴",group:"halogen"},{number:86,symbol:"Rn",name:"라돈",group:"noble-gas"},{number:87,symbol:"Fr",name:"프랑슘",group:"alkali-metal"},{number:88,symbol:"Ra",name:"라듐",group:"alkaline-earth-metal"},{number:89,symbol:"Ac",name:"악티늄",group:"actinide"},{number:90,symbol:"Th",name:"토륨",group:"actinide"},{number:91,symbol:"Pa",name:"프로트악티늄",group:"actinide"},{number:92,symbol:"U",name:"우라늄",group:"actinide"},{number:93,symbol:"Np",name:"넵투늄",group:"actinide"},{number:94,symbol:"Pu",name:"플루토늄",group:"actinide"},{number:95,symbol:"Am",name:"아메리슘",group:"actinide"},{number:96,symbol:"Cm",name:"퀴륨",group:"actinide"},{number:97,symbol:"Bk",name:"버클륨",group:"actinide"},{number:98,symbol:"Cf",name:"캘리포늄",group:"actinide"},{number:99,symbol:"Es",name:"아인슈타이늄",group:"actinide"},{number:100,symbol:"Fm",name:"페르뮴",group:"actinide"},{number:101,symbol:"Md",name:"멘델레븀",group:"actinide"},{number:102,symbol:"No",name:"노벨륨",group:"actinide"},{number:103,symbol:"Lr",name:"로렌슘",group:"actinide"},{number:104,symbol:"Rf",name:"러더포듐",group:"transition-metal"},{number:105,symbol:"Db",name:"더브늄",group:"transition-metal"},{number:106,symbol:"Sg",name:"시보귬",group:"transition-metal"},{number:107,symbol:"Bh",name:"보륨",group:"transition-metal"},{number:108,symbol:"Hs",name:"하슘",group:"transition-metal"},{number:109,symbol:"Mt",name:"마이트너륨",group:"unknown"},{number:110,symbol:"Ds",name:"다름슈타튬",group:"unknown"},{number:111,symbol:"Rg",name:"뢴트게늄",group:"unknown"},{number:112,symbol:"Cn",name:"코페르니슘",group:"transition-metal"},{number:113,symbol:"Nh",name:"니호늄",group:"unknown"},{number:114,symbol:"Fl",name:"플레로븀",group:"post-transition-metal"},{number:115,symbol:"Mc",name:"모스코븀",group:"unknown"},{number:116,symbol:"Lv",name:"리버모륨",group:"unknown"},{number:117,symbol:"Ts",name:"테네신",group:"halogen"},{number:118,symbol:"Og",name:"오가네손",group:"noble-gas"}];
+const cardDataString = `3   수소연료전지  일반  수소와 산소와 반응해 물과 전기에너지를 생산합니다.    1   H   수소  8   O   산소
+3   우주의 구성원소    일반  빅뱅 당시 만들어진 수소와 헬륨에서 시작해 우주의 역사를 지나며 무궁무진하게 많은 원소가 만들어졌네요.   1   H   수소  2   He  헬륨
+1   헬륨가스(풍선)    일반  밀도가 낮아 흡입하면 목소리가 높아집니다. 2   He  헬륨
+4   리튬배터리   일반  동전처럼 생긴 전지가 보통 리튬으로 만들어진 배터리입니다.    3   Li  리튬
+5   붕사(액체괴물)    일반  액체괴물의 말랑 쫀득한 느낌은 붕사 덕분에 그렇게 되는 것입니다.    1   H   수소  5   B   붕소  8   O   산소
+3   캔   일반  잘 팽창하고, 모양도 잡기 쉽고, 열전도율도 높은데 음료 보관용 캔으로 활용하지 않을 이유가 있을까요?   13  Al  알루미늄
+3   그래핀 일반  강도가 매우 강하며, 차세대의 물질로 각광받고 있습니다. 6   C   탄소
+5   인체를 구성하는 대표원소   일반  유기 화학에 입문해볼 생각 있으신가요? 정말 재미있습니다!    1   H   수소  6   C   탄소  8   O   산소
+3   암모니아    일반  생물은 단백질을 섭취 후 독성이 있는 암모니아를 독성이 적은 요소나 요소로 대사하여 체외로 배설합니다.   1   H   수소  7   N   질소
+3   메테인 일반  세상에서 가장 간단한 탄소 화합물로 천연 가스의 주 성분이기도 합니다. 1   H   수소  6   C   탄소
+4   충치예방 치약 일반  플루오린화 나트륨은 치아 표면의 세균을 억제하는 기능이 있어 치약이나 가글에 많이 사용됩니다.    9   F   플루오린    11  Na  나트륨
+2   네온사인    일반  기본적으로 네온사인은 주황색이지만, 더 다양한 색을 내고 싶을 땐 여러가지 다른 기체와 혼합하기도 합니다. 10  Ne  네온
+4   소금  일반  나트륨은 폭발성을 지니고, 염소는 유독가스인데 어째서 그 둘을 합친 소금은 음식에 넣으면 맛있어지는걸까요? 11  Na  나트륨 17  Cl  염소
+3   염산  일반  교과서 실험에서 보던 녀석은 묽은 염산이지만 원래 염산은 엄청나게 강한 강산이라구요! 1   H   수소  17  Cl  염소
+6   단백질 일반  인체를 구성하는 세포의 거의 모든 기능을 수행합니다. 메티오닌이라는 아미노산을 포함한 단백질은 황(S)을 가집니다.    1   H   수소  6   C   탄소  7   N   질소  8   O   산소  16  S   황
+9   ATP 일반  생명체의 생명활동에 필요한 에너지원. 생물의 탄생과 함께 생명의 역사를 함께한 화합물.    1   H   수소  6   C   탄소  7   N   질소  8   O   산소  15  P   인
+7   비료  일반  비료의 3대 원소입니다. 안정적으로 비료를 생산 가능해진 시점부터 세계 인구가 폭발적으로 증가했습니다.   7   N   질소  15  P   인   19  K   칼륨
+6   바다의 염류  일반  하다하다 이제 바닷물도 만들어 달라구요?? 11  Na  나트륨 12  Mg  마그네슘    16  S   황   17  Cl  염소
+3   섬광탄의 금속 충전  일반  반응성이 높은 금속이 순식간에 산화되면 강력한 섬광이 발생됩니다. 이를 이용해 시각을 일시적으로 정지시켜요.    12  Mg  마그네슘    13  Al  알루미늄
+3   보호용 기체  일반  어떤 물체를 산소나 다른 반응성이 있는 기체로부터 보호할 때 반응성이 매우 적은 아르곤을 이용하기도 합니다.    18  Ar  아르곤
+6   대기  일반  인류도 언젠가 인공 대기를 만들어 다른 행성을 테라포밍 하는 날이 오겠죠?   7   N   질소  8   O   산소  18  Ar  아르곤
+6   화약  일반  적절한 연료만 존재한다면, 연소의 속도가 매우 빠른 질산칼륨을 활용해 화약을 제작할 수 있습니다.  7   N   질소  8   O   산소  19  K   칼륨
+5   인산기, 인산염    일반  뼈와 치아를 구성하기도 하고, 의학 및 생물학 분야에서 활발하게 연구 목적으로 이용됩니다.  1   H   수소  8   O   산소  15  P   인
+4   유리  일반  다양한 건축물, 산업에 이용되는 유리는 이산화규소로 주로 제작합니다.  8   O   산소  14  Si  규소
+5   염화 칼슘   일반  물에 녹으면 어는점을 크게 낮춰주어 흔히 제설용으로 많이 사용됩니다.  17  Cl  염소  20  Ca  칼슘
+5   황산  일반  대표적인 강산으로 각 나라의 황산 생산량이 그 나라의 화학 산업 규모를 나타내기도 합니다.  1   H   수소  8   O   산소  16  S   황
+7   락스  일반  차아염소산나트륨을 물에 녹인 수용액을 뜻합니다. 주방, 욕실, 수영장 등 가장 많이 쓰이는 살균소독용 물질이기도 합니다. 8   O   산소  11  Na  나트륨 17  Cl  염소
+2   뼈   일반  뼈를 구성하는 원소여서 섭취가 중요하다고 여겨지지만 신경 및 근육 반응에도 영향을 미치는 중요한 원소입니다.    20  Ca  칼슘
+6   분필과 조개껍질    일반  탄산칼슘은 대리석, 달걀, 조개껍질의 성분입니다. 산성 물질과 만나면 거품을 내며 반응합니다.    6   C   탄소  8   O   산소  20  Ca  칼슘
+8   에메랄드    일반  광물과 보석들도 다양한 원소로 이루어져있다는 사실!    4   Be  베릴륨 8   O   산소  13  Al  알루미늄    14  Si  규소
+4   질소순환효소의 보조인자    고급  생체 기능을 수행하기 위한 효소에 포함된 필수적인 원소입니다. 식물의 질소고정 작용과 연관된 효소의 보조인자로 작용합니다.    42  Mo  몰리브데넘
+3   동상  고급  랜드마크, 우상화, 위인 등 기념성이 필요한 데에는 동상이죠. 북한이 동상기술 강국이기도 합니다.  29  Cu  구리
+4   야광 물질   고급  야광 성질을 나타내는 스트론튬 화합물은 빛을 받아 촉광 상태가 되면, 어두워지더라도 희미하게 빛을 내뿜다 어두워집니다.  38  Sr  스트론튬
+3   게르마늄 팔찌 고급  과학을 배운 친구들이라면 사기란 거 알죠??    32  Ge  저마늄
+3   전구의 필라멘트    고급  전기저항도 커서 밝은 빛을 낼 수도 있고, 녹는 온도도 높으니 전구에 필라멘트로 제격이죠.  74  W   텅스텐
+4   라돈을 포집해주세요  고급  지구상 어디에나 존재하는 자연 방사성 물질입니다. 새집증후군과도 연관 있어 노출되면 폐암을 유발할 수 있습니다.  86  Rn  라돈
+3   고급 안경테  고급  내식성이 우수해 부식이 잘 되지 않으며 강한 충격에도 잘 부러지지 않아 안경테로 활용됩니다. 22  Ti  티타늄
+5   우주 거울   고급  베릴륨은 가볍고 열팽창률이 낮아 우주로 발사되는 반사 망원경 거울에 활용됩니다. 제임스웹은 여기에 금 도금이 되었죠.   4   Be  베릴륨 79  Au  금
+5   가벼운 합금  고급  스칸듐-알루미늄 합금은 가볍고 강도와 내구성이 좋아 항공기 부품이나 자전거 프레임으로 많이 활용됩니다.   13  Al  알루미늄    21  Sc  스칸듐
+6   고성능 조명기체    고급  카메라 플래시나 등대의 불빛에 많이 사용되는 이들 기체는 반응성이 거의 없어 조명의 충전재로 활용됩니다.  36  Kr  크립톤 54  Xe  제논
+4   수정테이프, 흰 물감 고급  이산화티타늄은 흰색의 화합물로 페인트, 수정테이프 및 선크림에 종종 이용됩니다.    8   O   산소  22  Ti  티타늄
+5   실온에서 액체인 물질 고급  수은은 온도계로도 이용되지요? 주기율표 상에서 꽤 떨어진 두 원소가 비슷한 성질을 갖고 있다니 신기하지 않나요?  35  Br  브로민 80  Hg  수은
+5   노란색 물감  고급  두 원소는 노란색을 내는 데 사용하는 대표적인 염료입니다.    24  Cr  크로뮴 48  Cd  카드뮴
+5   너 귀여워   고급  과학을 좋아하는 이성친구를 만나고 싶다고요? 넌 구리와 텔루륨으로 구성된 것 같아!라고 플러팅 해보세요!  29  Cu  구리  52  Te  텔루륨
+6   건전지 고급  망가니즈 건전지는 일차 전지 중 하나로, 전해질 속에서 아연과 이산화 망가니즈 간의 전기화학 반응으로 에너지를 공급합니다.    25  Mn  망가니즈    30  Zn  아연
+5   광섬유 고급  한 번 섬유 내로 들어간 빛이 내부에서 전반사를 통해 반대편으로 나갑니다. 데이터 손실이 적어 통신에 활용됩니다. 14  Si  규소  32  Ge  저마늄
+5   비듐 샴푸   고급  황화셀레늄은 미생물에 의한 피부염·비듬을 치료하는 샴푸 등에 사용됩니다.    16  S   황   34  Se  셀레늄
+6   브로마이드   고급  브로민화은(AgBr)을 사용한 인화지로 인쇄한 사진을 지칭합니다. 최근에는 연예인 덕질용 사진을 뜻하기도 하죠.  35  Br  브로민 47  Ag  은
+6   인공치아    고급  임플란트(크라운)에 쓰이는 인공치아 재료 원소들입니다.  40  Zr  지르코늄    79  Au  금
+7   만년필 펜촉  고급  고급 만년필에 활용되는 금속 원소들입니다. 오랜 기간 사용해도 필기감이 변하지 않는다고 합니다.   44  Ru  루테늄 76  Os  오스븀
+5   납땜  고급  두 개 이상의 물질을 결합하는 기초적인 용접법으로, 인류의 역사와 함께해온 기술입니다.    50  Sn  주석  82  Pb  납
+5   상변화 메모리 고급  비휘발성과 빠른 속도의 장점을 가진 차세대 메모리 반도체입니다. 51  Sb  안티모니    52  Te  텔루륨
+4   아이오딘화 칼륨    고급  녹말과 반응하면 청람색으로 변해 영양소 검출 실험에 자주 사용됩니다.  19  K   칼륨  53  I   아이오딘
+5   많이 이용되는 금속원소    고급  비료의 3대 원소로, 안정적 비료 생산이 가능해진 이후 세계 인구가 폭발적으로 증가했습니다. 12  Mg  마그네슘    13  Al  알루미늄    26  Fe  철
+8   반도체에 이용되는 원소    고급  물리학 역사상 가장 실용적이며, 현대 정보 산업의 기초가 된 물체들입니다.   14  Si  규소  32  Ge  저마늄 51  Sb  안티모니
+8   불꽃놀이    고급  폭발은 예술이죠. 이 외에도 다양한 원소들이 활용됩니다. 22  Ti  티타늄 38  Sr  스트론튬    56  Ba  바륨
+5   식품의 오염 지표   고급  방사능 사고 시 방사선을 가장 많이 방출하는 아이오딘과 세슘을 식품 오염 지표로 활용합니다. 53  I   아이오딘    55  Cs  세슘
+6   퀴리 부부의 역사 드라마   고급  퀴리 부부가 발견한 방사성 원소들입니다. 위험한 드라마 촬영은 피해야겠죠?   84  Po  폴로늄 88  Ra  라듐
+9   핵 제어봉   고급  연쇄 핵분열 속도를 조절할 때 사용됩니다. 중성자를 잘 흡수하는 원소들이죠.  5   B   붕소  47  Ag  은   72  Hf  하프늄
+7   스테인리스   고급  녹이 거의 슬지 않는 합금입니다. 다양한 금속 제품에 활용됩니다.    24  Cr  크로뮴 26  Fe  철   28  Ni  니켈
+7   대표적인 자성 원소  고급  네오디뮴(Nd)도 포함됩니다. 자석을 쪼개면 또다시 두 극이 생기죠. 이론상 분리는 불가능합니다.  26  Fe  철   27  Co  코발트 28  Ni  니켈
+6   동전  고급  인류 역사상 가장 좋은 친구이죠. 발행 비용 때문에 지폐로 넘어가는 추세입니다.    28  Ni  니켈  29  Cu  구리  30  Zn  아연
+7   갈린스탄    고급  독성이 적어 수은 대체제로, 냉각재·체온계 재료로 사용됩니다.  31  Ga  갈륨  49  In  인듐  50  Sn  주석
+8   독약  고급  대표적 맹독으로, 역사적으로 암살에 많이 이용되었습니다. 33  As  비소  81  Tl  탈륨  84  Po  폴로늄
+8   목소리를 변화시키는 기체   고급  비활성 기체로 흡입 시 진동수를 바꿔 목소리를 높이거나 낮춥니다.    2   He  헬륨  36  Kr  크립톤 54  Xe  제논
+8   파란색 크레파스    고급  인망 블루라고 불리는 화합물이 더 강한 파란색을 나타내 크레파스로 이용됩니다. 25  Mn  망가니즈    39  Y   이트륨 49  In  인듐
+8   초전도 자석  고급  안정적 자기장을 얻을 수 있고, 소모전력이 적어 미래 과학기술의 핵심 소재입니다.   22  Ti  티타늄 41  Nb  나이오븀    50  Sn  주석
+9   방사선 진단  고급  암·난치성 질환 진단을 위한 핵의학 영상검사에 사용되는 방사성 원소들입니다.  43  Tc  테크네튬    53  I   아이오딘    83  Bi  비스무트
+9   배기가스 제거 촉매  고급  로듐은 질소산화물, 팔라듐과 백금은 탄소화합물을 안전한 물질로 전환합니다.   45  Rh  로듐  46  Pd  팔라듐 78  Pt  백금
+7   귀금속 고급  장식용·투자용으로 희귀하며, 산화가 거의 일어나지 않는 금속들입니다.  47  Ag  은   78  Pt  백금  79  Au  금
+8   담배의 중금속을 없애주세요  고급  백해무익한 담배… 이래도 피운다구요?    48  Cd  카드뮴 80  Hg  수은  82  Pb  납
+8   플루오로안티몬산    고급  지금까지 발견된 보관 가능한 화합물 중 가장 높은 산도를 가지며 거의 모든 유기화합물을 녹여버립니다.    1   H   수소  9   F   플루오린    51  Sb  안티모니
+7   tert-부틸리튬   고급  지금까지 발견된 화합물 중 가장 높은 염기를 가지며 유기화합물을 녹여버립니다. 1   H   수소  3   Li  리튬  6   C   탄소
+9   반감기가 짧은 원소  고급  반감기가 너무 짧아 생성되자마자 붕괴해버리는 원소들입니다.    75  Re  레늄  85  At  아스타틴    87  Fr  프랑슘
+8   지구의 구성성분    고급  지구를 구성하는 주요 원소들입니다. 8   O   산소  12  Mg  마그네슘    14  Si  규소  26  Fe  철
+9   엔진의 합금  고급  이들로 이뤄진 합금은 내열성이 매우 높아 엔진용 금속으로 활용되기에 충분합니다.    23  V   바나듐 24  Cr  크로뮴 26  Fe  철   28  Ni  니켈
+7   전선  고급  전기가 잘 흐르는 이들 원소는 전선에 특히 많이 이용됩니다.   13  Al  알루미늄    29  Cu  구리  47  Ag  은   79  Au  금
+8   분쟁광물을 구해주세요 고급  무장세력이 이 광물의 유통과 채굴을 장악해 인권문제를 발생시킵니다.   50  Sn  주석  73  Ta  탄탈럼 74  W   텅스텐 79  Au  금
+9   내열성이 높은 원소  고급  내열성이 매우 높아 관련 성질을 필요로 하는 산업에 자주 이용되는 원소입니다. 74  W   텅스텐 75  Re  레늄  76  Os  오스뮴 77  Ir  이리듐
+0   핵무기 고급  이 카드는 주사위 값(89~103)에 큐브가 있다면 생산할 수 있습니다.    92  U   우라늄 94  Pu  플루토늄
+`;
+
+// --- GLOBAL STATE & CONFIG ---
+let gameState = {};
+const playerColors = ['red', 'blue', 'green', 'yellow', 'purple', 'pink'];
+const allDiceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd%'];
+const diceNames = {
+    'd4': '사면체', 'd6': '육면체', 'd8': '팔면체', 'd10': '십면체',
+    'd12': '십이면체', 'd20': '이십면체', 'd%': '백분율'
+};
+const technologies = {
+    multiply: { id: 'multiply', name: '곱셈/나눗셈', icon: '✶', desc: "+, – 대신 × 또는 ÷ 연산을 사용할 수 있습니다." },
+    concat: { id: 'concat', name: '자리붙이기', icon: '⧖', desc: "두 주사위 눈을 이어 붙여 두 자릿수를 만듭니다." },
+    slide: { id: 'slide', name: '슬라이드', icon: '↔', desc: "큐브 배치 후, 내 큐브 중 1개를 인접한(가로/세로) 빈칸으로 이동시킵니다." },
+    outsource: { id: 'outsource', name: '외주 생산', icon: '🄧', desc: "카드 판매 시, 필요 원소 1개를 상대방 큐브로 대체합니다. (라운드당 1회)" }
+};
+const diceRewards = [5, 10, 20, 40];
+const techRewards = [10, 20, 30, 40];
+
+// --- COORDINATE MAP FOR NEIGHBORS ---
+const elementCoords = {};
+const coordsToElement = {};
+function buildCoordinateMap() {
+    const mainGridMapping = {
+        1: {r:1, c:1}, 2: {r:1, c:18}, 3: {r:2, c:1}, 4: {r:2, c:2},
+        5: {r:2, c:13}, 6: {r:2, c:14}, 7: {r:2, c:15}, 8: {r:2, c:16}, 9: {r:2, c:17}, 10: {r:2, c:18},
+        11: {r:3, c:1}, 12: {r:3, c:2}, 13: {r:3, c:13}, 14: {r:3, c:14}, 15: {r:3, c:15}, 16: {r:3, c:16}, 17: {r:3, c:17}, 18: {r:3, c:18},
+    };
+    for(const [num, pos] of Object.entries(mainGridMapping)) {
+        elementCoords[num] = pos;
+    }
+    for(let i=19; i<=36; i++) elementCoords[i] = {r:4, c:i-18};
+    for(let i=37; i<=54; i++) elementCoords[i] = {r:5, c:i-36};
+    for(let i=55; i<=56; i++) elementCoords[i] = {r:6, c:i-54};
+    for(let i=72; i<=86; i++) elementCoords[i] = {r:6, c:i-68};
+    for(let i=87; i<=88; i++) elementCoords[i] = {r:7, c:i-86};
+    for(let i=104; i<=118; i++) elementCoords[i] = {r:7, c:i-100};
+    for(let i=57; i<=71; i++) elementCoords[i] = {r:8, c:i-54};
+    for(let i=89; i<=103; i++) elementCoords[i] = {r:9, c:i-86};
+
+    for(const [num, pos] of Object.entries(elementCoords)) {
+        coordsToElement[`${pos.r},${pos.c}`] = parseInt(num);
+    }
+}
+
+
+// DOM Elements
+const app = {
+    setupModal: document.getElementById('setup-modal'),
+    startGameBtn: document.getElementById('start-game-btn'),
+    playerCountSelector: document.getElementById('player-count-selector'),
+    gameStatus: document.getElementById('game-status'),
+    playersPanel: document.getElementById('players-panel'),
+    tableContainer: document.getElementById('periodic-table-container'),
+    controlsPanel: document.getElementById('controls-panel'),
+    basicMarket: document.getElementById('basic-market'),
+    advancedMarket: document.getElementById('advanced-market'),
+    calcModal: document.getElementById('calculation-modal'),
+    calcPlayerName: document.getElementById('calc-player-name'),
+    diceRollResults: document.getElementById('dice-roll-results'),
+    singleDiceOptions: document.getElementById('single-dice-options'),
+    calcDice1: document.getElementById('calc-dice-1'),
+    calcDice2: document.getElementById('calc-dice-2'),
+    calcOp: document.getElementById('calc-op'),
+    calcResult: document.getElementById('calc-result'),
+    calcError: document.getElementById('calc-error'),
+    confirmProductionBtn: document.getElementById('confirm-production-btn'),
+    choiceModal: document.getElementById('choice-modal'),
+    choiceTitle: document.getElementById('choice-title'),
+    choiceOptions: document.getElementById('choice-options'),
+    gameOverModal: document.getElementById('game-over-modal'),
+    finalScores: document.getElementById('final-scores'),
+    scoreboardPanel: document.getElementById('scoreboard-panel'),
+    techTrackPanel: document.getElementById('tech-track-panel'),
+    devPanel: document.getElementById('dev-panel'),
+    toggleDevPanelBtn: document.getElementById('toggle-dev-panel'),
+    returnToModalBtn: document.getElementById('return-to-modal-btn'),
+};
+
+// --- UTILITY FUNCTIONS ---
+const shuffle = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[array[i], array[j]] = [array[j], array[i]]; } return array; };
+const rollDie = (type) => { if (type === 'd%') return Math.floor(Math.random() * 10) * 10; const sides = parseInt(type.slice(1)); return Math.floor(Math.random() * sides) + 1; };
+const showMessage = (text, onOk) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+        <div class="modal-content text-center">
+            <p class="text-lg mb-4 whitespace-pre-line">${text}</p>
+            <button class="btn btn-primary">확인</button>
+        </div>
+    `;
+    modal.querySelector('button').onclick = () => {
+        document.body.removeChild(modal);
+        if (onOk) onOk();
+    };
+    document.body.appendChild(modal);
+};
+
+// --- DATA PARSING ---
+const parseCards = () => {
+    const lines = cardDataString.trim().split('\n');
+    return lines.map((line, index) => {
+        const parts = line.split(/\s{2,}/).filter(p => p);
+        const score = parseInt(parts[0]);
+        if (isNaN(score)) return null;
+        const name = parts[1];
+        const type = parts[2] === '일반' ? 'basic' : 'advanced';
+        const text = parts[3];
+        const elementData = parts.slice(4);
+        const elements = [];
+        for (let i = 0; i < elementData.length; i += 3) {
+            const num = parseInt(elementData[i]);
+            if (!isNaN(num)) elements.push(num);
+        }
+        return { id: `card-${index}`, score, name, type, text, elements };
+    }).filter(Boolean);
+};
+const allCards = parseCards();
+
+// --- RENDER FUNCTIONS ---
+function render() {
+    if (!gameState.players) return;
+    renderScoreboard();
+    renderPlayersPanel();
+    renderPeriodicTable();
+    renderMarket();
+    renderTechTrack();
+    updateGameStatus();
+    renderControls();
+}
+
+function renderScoreboard() {
+    app.scoreboardPanel.innerHTML = '';
+    const track = document.createElement('div');
+    track.id = 'scoreboard-track';
+
+    for (let i = 1; i <= 60; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'score-cell';
+        cell.textContent = i;
+        cell.id = `score-cell-${i}`;
+        if (diceRewards.includes(i)) cell.classList.add('dice-reward');
+        if (techRewards.includes(i)) cell.classList.add('tech-reward');
+        track.appendChild(cell);
+    }
+    app.scoreboardPanel.appendChild(track);
+
+    const scorePositions = {};
+    gameState.players.forEach(player => {
+        const score = player.score > 60 ? 60 : player.score;
+        if (!scorePositions[score]) {
+            scorePositions[score] = 0;
+        }
+        const token = document.createElement('div');
+        token.className = `player-token cube-${player.color}`;
+        token.title = player.name;
+        
+        const targetCell = track.querySelector(`#score-cell-${score || 1}`);
+        if (targetCell) {
+            const offset = scorePositions[score] * 10;
+            token.style.left = `${10 + offset}%`;
+            token.style.top = `${10 + offset}%`;
+            targetCell.appendChild(token);
+            scorePositions[score]++;
+        }
+    });
+}
+
+function renderPlayersPanel() {
+    app.playersPanel.innerHTML = '';
+    gameState.players.forEach(player => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = `p-4 bg-bg-card border border-border-color rounded-lg shadow-md transition-all duration-300 ${player.id === gameState.currentPlayerId ? 'player-card active' : ''}`;
+        
+        const techHtml = player.tech.map(techId => {
+            const tech = technologies[techId];
+            return `<span class="tech-icon tech-${techId}" title="${tech.name}: ${tech.desc}">${tech.icon}</span>`;
+        }).join('');
+
+        const diceHtml = player.dice.map(d => `<span class="bg-slate-600 px-2 py-1 rounded text-xs font-mono">${diceNames[d]}</span>`).join(' ');
+        
+        let diceRollsHtml = '';
+        if (gameState.phase === 'production' && player.diceResults.length > 0) {
+            diceRollsHtml = `
+                <div class="mt-2 p-2 bg-bg-dark rounded-md">
+                    <p class="text-xs text-text-secondary mb-1">주사위 결과:</p>
+                    <div class="flex flex-wrap gap-1">
+                        ${player.diceResults.map(r => `<span class="font-bold text-accent-cyan">${r.value}</span>`).join(', ')}
+                    </div>
+                </div>
+            `;
+        }
+
+        playerDiv.innerHTML = `
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full cube-${player.color}"></span>
+                    ${player.name}
+                </h3>
+            </div>
+            <div class="space-y-3 text-sm">
+                <p class="flex items-center gap-2"><strong>주사위:</strong> <span class="flex flex-wrap gap-1">${diceHtml}</span></p>
+                <p class="flex items-start gap-2"><strong>기술:</strong> <span class="flex flex-wrap gap-1">${techHtml || '없음'}</span></p>
+                <p><strong>생산 큐브:</strong> <span class="font-bold text-accent-cyan">${player.cubesOnBoard.length} / 6</span></p>
+            </div>
+            ${diceRollsHtml}
+        `;
+        app.playersPanel.appendChild(playerDiv);
+    });
+}
+
+function renderPeriodicTable() {
+    const container = app.tableContainer;
+    container.innerHTML = ''; // Clear previous content
+
+    const mainGrid = document.createElement('div');
+    mainGrid.className = 'periodic-table-grid';
+    
+    const lanthanideGrid = document.createElement('div');
+    lanthanideGrid.className = 'periodic-table-grid mt-4';
+    
+    const actinideGrid = document.createElement('div');
+    actinideGrid.className = 'periodic-table-grid mt-1';
+
+    const productionTarget = gameState.productionTarget;
+
+    for (let i = 1; i <= 118; i++) {
+        const element = periodicTableData[i];
+        if (!element) continue;
+
+        const cell = document.createElement('div');
+        cell.className = `element-cell group-${element.group}`;
+        cell.dataset.atomicNumber = i;
+
+        if (productionTarget === i) cell.classList.add('producible');
+        if (gameState.explosionChoices?.includes(i)) cell.classList.add('explosion-choice');
+
+        const playersOnElement = gameState.players.filter(p => p.cubesOnBoard.includes(i));
+        const cubeHtml = playersOnElement.map(p => `<div class="cube cube-${p.color}" title="${p.name}"></div>`).join('');
+
+        cell.innerHTML = `
+            <div class="element-number">${element.number}</div>
+            <div class="element-symbol">${element.symbol}</div>
+            <div class="element-name">${element.name}</div>
+            <div class="cube-container">${cubeHtml}</div>
+        `;
+
+        if (element.number >= 57 && element.number <= 71) {
+            cell.style.gridColumn = `${element.number - 57 + 3} / span 1`;
+            lanthanideGrid.appendChild(cell);
+        } else if (element.number >= 89 && element.number <= 103) {
+            cell.style.gridColumn = `${element.number - 89 + 3} / span 1`;
+            actinideGrid.appendChild(cell);
+        } else {
+            if (element.number === 1) cell.style.gridColumn = '1 / span 1';
+            else if (element.number === 2) cell.style.gridColumn = '18 / span 1';
+            else if (element.number >= 3 && element.number <= 4) cell.style.gridColumn = `${element.number - 2} / span 1`;
+            else if (element.number >= 5 && element.number <= 10) cell.style.gridColumn = `${element.number + 8} / span 1`;
+            else if (element.number >= 11 && element.number <= 12) cell.style.gridColumn = `${element.number - 10} / span 1`;
+            else if (element.number >= 13 && element.number <= 18) cell.style.gridColumn = `${element.number} / span 1`;
+            else if (element.number >= 19 && element.number <= 36) cell.style.gridColumn = `${element.number - 18} / span 1`;
+            else if (element.number >= 37 && element.number <= 54) cell.style.gridColumn = `${element.number - 36} / span 1`;
+            else if (element.number >= 55 && element.number <= 56) cell.style.gridColumn = `${element.number - 54} / span 1`;
+            else if (element.number >= 72 && element.number <= 86) cell.style.gridColumn = `${element.number - 68} / span 1`;
+            else if (element.number >= 87 && element.number <= 88) cell.style.gridColumn = `${element.number - 86} / span 1`;
+            else if (element.number >= 104 && element.number <= 118) cell.style.gridColumn = `${element.number - 100} / span 1`;
+            mainGrid.appendChild(cell);
+        }
+    }
+    container.appendChild(mainGrid);
+    container.appendChild(lanthanideGrid);
+    container.appendChild(actinideGrid);
+}
+
+function renderMarket() {
+    function renderDeck(market, deck, deckElem, deckType) {
+        deckElem.innerHTML = '';
+        market.forEach((card) => {
+            deckElem.appendChild(createCardDOM(card, deckType, false));
+        });
+        
+        const nextCard = deck[0];
+        if (nextCard) {
+            const previewWrapper = document.createElement('div');
+            previewWrapper.className = "mt-3";
+            previewWrapper.innerHTML = `<p class="text-xs text-center text-text-secondary mb-1">다음 카드</p>`;
+            previewWrapper.appendChild(createCardDOM(nextCard, deckType, true));
+            deckElem.appendChild(previewWrapper);
+        }
+    }
+
+    renderDeck(gameState.market.basic, gameState.decks.basic, app.basicMarket, 'basic');
+    renderDeck(gameState.market.advanced, gameState.decks.advanced, app.advancedMarket, 'advanced');
+    
+    document.querySelectorAll('.sell-btn').forEach(btn => btn.addEventListener('click', handleSellCard));
+}
+
+function createCardDOM(card, cardType, isPreview) {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = `bg-bg-card border border-border-color p-3 rounded-lg shadow-md flex flex-col ${isPreview ? 'opacity-50' : ''}`;
+    
+    const elementsHtml = card.elements.map(num => {
+        const el = periodicTableData[num];
+        const ownersHtml = gameState.players
+            .filter(p => p.cubesOnBoard.includes(el.number))
+            .map(p => `<div class="w-2 h-2 rounded-full cube-${p.color}" title="${p.name}"></div>`)
+            .join('');
+
+        return `<div class="flex items-center gap-1 bg-slate-700 px-2 py-1 rounded-full text-xs">
+                   <div class="w-3 h-3 rounded-full" style="background-color: var(--group-${el.group})"></div>
+                   <span class="font-bold">${el.symbol}</span>
+                   <span class="text-text-secondary">(${el.number})</span>
+                   <div class="flex ml-1 gap-px">${ownersHtml}</div>
+                </div>`;
+    }).join('');
+    
+    const canSell = canPlayerSellCard(gameState.players.find(p => p.id === gameState.currentPlayerId), card);
+
+    cardDiv.innerHTML = `
+        <div class="flex-grow">
+            <div class="flex justify-between items-start">
+                <h4 class="font-bold text-base ${card.type === 'basic' ? 'text-accent-amber' : 'text-fuchsia-400'}">${card.name}</h4>
+                <span class="text-lg font-bold text-white">${card.score}점</span>
+            </div>
+            <p class="text-xs text-text-secondary mt-1 mb-2">${card.text}</p>
+            <div class="flex flex-wrap gap-2 items-center"><strong>필요:</strong> ${elementsHtml}</div>
+        </div>
+        <div class="text-right mt-3">
+            <button class="btn text-sm sell-btn ${canSell && !isPreview ? 'btn-primary' : 'btn-secondary'}" 
+                    data-card-id="${card.id}" data-card-type="${cardType}" ${(!canSell || isPreview || gameState.phase !== 'sales') ? 'disabled' : ''}>
+                판매
+            </button>
+        </div>
+    `;
+    return cardDiv;
+}
+
+function renderTechTrack() {
+    app.techTrackPanel.innerHTML = '<h3 class="text-xl font-bold text-center mb-3 text-accent-cyan">💡 기술 트랙</h3>';
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-2 gap-3';
+    
+    Object.values(technologies).forEach(tech => {
+        const techCard = document.createElement('div');
+        techCard.className = 'bg-bg-dark p-2 rounded';
+        
+        const acquiredByHtml = gameState.players
+            .filter(p => p.tech.includes(tech.id))
+            .map(p => `<div class="w-4 h-4 rounded-full cube-${p.color}" title="${p.name}"></div>`)
+            .join('');
+
+        techCard.innerHTML = `
+            <div class="flex items-center gap-2">
+                <span class="tech-icon tech-${tech.id}">${tech.icon}</span>
+                <span class="font-bold">${tech.name}</span>
+            </div>
+            <p class="text-xs text-text-secondary mt-1">${tech.desc}</p>
+            <div class="flex items-center gap-1 mt-2 h-4">${acquiredByHtml}</div>
+        `;
+        grid.appendChild(techCard);
+    });
+    app.techTrackPanel.appendChild(grid);
+}
+
+function renderControls() {
+    app.controlsPanel.innerHTML = '';
+    const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+    
+    if (gameState.phase === 'production') {
+        const text = document.createElement('p');
+        text.className = 'text-text-secondary mb-2';
+        text.textContent = `생산 단계: ${player.name} 님이 생산할 원소를 선택하세요.`;
+        app.controlsPanel.appendChild(text);
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = '원소 선택하기';
+        btn.onclick = () => openCalculationModal(player);
+        app.controlsPanel.appendChild(btn);
+        
+    } else if (gameState.phase === 'sales') {
+        const text = document.createElement('p');
+        text.className = 'text-text-secondary mb-2';
+        text.textContent = `판매 단계: ${player.name} 님의 차례입니다.`;
+        app.controlsPanel.appendChild(text);
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary';
+        btn.textContent = '판매하지 않고 턴 종료';
+        btn.onclick = handleEndTurn;
+        app.controlsPanel.appendChild(btn);
+    }
+}
+
+function updateGameStatus() {
+    if (!gameState.phase) return;
+    const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+    let statusText = `라운드 ${gameState.round} | `;
+    if (gameState.phase === 'production') {
+        statusText += `생산 단계 - ${player.name} 선택 중`;
+    } else {
+        statusText += `판매 단계 - ${player.name}의 턴`;
+    }
+    app.gameStatus.textContent = statusText;
+}
+
+
+// --- GAME LOGIC FUNCTIONS ---
+function initGame() {
+    const playerCount = gameState.playerCount;
+    if (!playerCount) {
+        showMessage('플레이어 수를 선택해주세요.');
+        return;
+    }
+    app.setupModal.classList.add('hidden');
+
+    const basicCards = allCards.filter(c => c.type === 'basic');
+    const advancedCards = allCards.filter(c => c.type === 'advanced');
+    const basicStarters = basicCards.filter(c => c.elements.length === 1);
+    const basicOthers = basicCards.filter(c => c.elements.length !== 1);
+    const advancedStarters = advancedCards.filter(c => c.elements.length === 1);
+    const advancedOthers = advancedCards.filter(c => c.elements.length !== 1);
+
+    gameState = {
+        ...gameState,
+        players: [],
+        decks: {
+            basic: [...basicStarters, ...shuffle(basicOthers)],
+            advanced: [...advancedStarters, ...shuffle(advancedOthers)]
+        },
+        market: { basic: [], advanced: [] },
+        round: 1,
+        phase: 'production',
+        currentPlayerId: 0,
+        firstPlayerId: 0,
+        gameOver: false,
+        productionTarget: null,
+        explosionChoices: null,
+        hiddenModal: null,
+    };
+
+    for (let i = 0; i < playerCount; i++) {
+        gameState.players.push({
+            id: i, name: `플레이어 ${i + 1}`, color: playerColors[i],
+            score: 0, dice: ['d20', 'd6', 'd4'], tech: [],
+            cubesOnBoard: [], soldCards: [],
+            diceResults: [], usedOutsource: false,
+            scoreMilestones: { dice: [], tech: [] }
+        });
+    }
+
+    for (let i = 0; i < 4; i++) {
+        if (gameState.decks.basic.length > 0) gameState.market.basic.push(gameState.decks.basic.shift());
+        if (gameState.decks.advanced.length > 0) gameState.market.advanced.push(gameState.decks.advanced.shift());
+    }
+
+    startProductionPhase();
+}
+
+function startProductionPhase() {
+    gameState.phase = 'production';
+    gameState.productionTarget = null;
+    gameState.currentPlayerId = gameState.firstPlayerId;
+    
+    gameState.players.forEach(p => {
+        p.diceResults = p.dice.map(d => ({ type: d, value: rollDie(d) }));
+        p.usedOutsource = false;
+    });
+    showMessage("모든 플레이어가 주사위를 굴렸습니다! 선 플레이어부터 원소를 생산하세요.", render);
+}
+
+function openCalculationModal(player) {
+    app.calcPlayerName.textContent = `${player.name}의 생산`;
+    app.diceRollResults.innerHTML = player.diceResults.map(r => `<span class="bg-bg-dark border border-border-color p-2 rounded font-bold">${diceNames[r.type]}: ${r.value}</span>`).join('');
+    
+    app.singleDiceOptions.innerHTML = '';
+    player.diceResults.forEach(r => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary';
+        btn.textContent = r.value;
+        btn.onclick = () => selectProductionNumber(r.value);
+        app.singleDiceOptions.appendChild(btn);
+    });
+
+    const diceOptionsHtml = player.diceResults.map((r, i) => `<option value="${i}">${r.value} (${diceNames[r.type]})</option>`).join('');
+    app.calcDice1.innerHTML = diceOptionsHtml;
+    app.calcDice2.innerHTML = diceOptionsHtml;
+
+    const ops = ['+', '−'];
+    if (player.tech.includes('multiply')) ops.push('×', '÷');
+    if (player.tech.includes('concat')) ops.push('⧖');
+    app.calcOp.innerHTML = ops.map(op => `<option value="${op}">${op}</option>`).join('');
+
+    [app.calcDice1, app.calcDice2, app.calcOp].forEach(el => { el.onchange = updateCalcResult; });
+
+    app.confirmProductionBtn.onclick = () => {
+        const finalValue = parseInt(app.calcResult.textContent);
+        if (isNaN(finalValue) || finalValue < 1 || finalValue > 118) {
+            showMessage("유효한 원자번호(1-118)를 만들어주세요.");
+            return;
+        }
+        app.calcModal.classList.add('hidden');
+        handlePlaceCube(player, finalValue);
+    };
+    
+    updateCalcResult();
+    app.calcModal.classList.remove('hidden');
+}
+
+function openChoiceModal({ title, options, onChoose, isDice = false }) {
+    app.choiceTitle.textContent = title;
+    app.choiceOptions.innerHTML = '';
+    options.forEach(option => {
+        const button = document.createElement('button');
+        button.className = 'btn btn-secondary';
+        button.textContent = isDice ? diceNames[option.text] : option.text;
+        button.onclick = () => {
+            app.choiceModal.classList.add('hidden');
+            onChoose(option.value);
+        };
+        app.choiceOptions.appendChild(button);
+    });
+    app.choiceModal.classList.remove('hidden');
+}
+
+
+function selectProductionNumber(num) {
+    app.calcResult.textContent = num;
+    gameState.productionTarget = num;
+    app.confirmProductionBtn.disabled = false;
+    renderPeriodicTable();
+}
+
+function updateCalcResult() {
+    const idx1 = parseInt(app.calcDice1.value);
+    const idx2 = parseInt(app.calcDice2.value);
+    const op = app.calcOp.value;
+    
+    const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+    if (!player) return;
+    
+    app.calcError.textContent = '';
+    if (idx1 === idx2) {
+        app.calcError.textContent = '중복된 주사위를 선택할 수 없습니다.';
+        app.confirmProductionBtn.disabled = true;
+        gameState.productionTarget = null;
+        renderPeriodicTable();
+        return;
+    }
+
+    const val1 = player.diceResults[idx1].value;
+    const val2 = player.diceResults[idx2].value;
+
+    let result = NaN;
+    switch (op) {
+        case '+': result = val1 + val2; break;
+        case '−': result = Math.abs(val1 - val2); break;
+        case '×': result = val1 * val2; break;
+        case '÷': result = Math.floor(val1 / val2); break;
+        case '⧖': result = parseInt(`${val1}${val2}`); break;
+    }
+    
+    if (isNaN(result) || result < 1 || result > 118) {
+        app.calcResult.textContent = 'X';
+        app.confirmProductionBtn.disabled = true;
+        gameState.productionTarget = null;
+    } else {
+        app.calcResult.textContent = result;
+        app.confirmProductionBtn.disabled = false;
+        gameState.productionTarget = result;
+    }
+    renderPeriodicTable();
+}
+
+function handlePlaceCube(player, atomicNumber) {
+    const isDuplicate = player.cubesOnBoard.includes(atomicNumber);
+
+    if (isDuplicate) {
+        showMessage("원소 폭발!", () => {
+            const neighbors = getNeighbors(atomicNumber);
+            const emptyNeighbors = neighbors.filter(n => !gameState.players.some(p => p.cubesOnBoard.includes(n)));
+            if (emptyNeighbors.length > 0) {
+                gameState.explosionChoices = emptyNeighbors;
+                renderPeriodicTable();
+                showMessage("인접한 빈 칸 중 하나를 클릭하여 큐브를 놓으세요.");
+            } else {
+                showMessage("인접한 빈 칸이 없어 큐브를 놓을 수 없습니다.", advanceProductionTurn);
+            }
+        });
+    } else {
+        if (player.cubesOnBoard.length >= 6) {
+            openChoiceModal({
+                title: '큐브 교체: 어느 큐브를 옮기시겠습니까?',
+                options: player.cubesOnBoard.map(n => ({ text: `${periodicTableData[n].symbol} (${periodicTableData[n].name})`, value: n })),
+                onChoose: (toRemove) => {
+                    player.cubesOnBoard = player.cubesOnBoard.filter(n => n !== toRemove);
+                    player.cubesOnBoard.push(atomicNumber);
+                    advanceProductionTurn();
+                }
+            });
+        } else {
+            player.cubesOnBoard.push(atomicNumber);
+            advanceProductionTurn();
+        }
+    }
+}
+
+function advanceProductionTurn() {
+    gameState.productionTarget = null;
+    gameState.explosionChoices = null;
+    const nextPlayerId = (gameState.currentPlayerId + 1) % gameState.players.length;
+    gameState.currentPlayerId = nextPlayerId;
+
+    if (gameState.currentPlayerId === gameState.firstPlayerId) {
+        startSalesPhase();
+    } else {
+        render();
+    }
+}
+
+function getNeighbors(atomicNumber) {
+    const { r, c } = elementCoords[atomicNumber];
+    const potentialNeighbors = [
+        coordsToElement[`${r},${c - 1}`], // left
+        coordsToElement[`${r},${c + 1}`], // right
+        coordsToElement[`${r - 1},${c}`], // up
+        coordsToElement[`${r + 1},${c}`], // down
+    ];
+    return potentialNeighbors.filter(n => n !== undefined);
+}
+
+function startSalesPhase() {
+    gameState.phase = 'sales';
+    gameState.currentPlayerId = gameState.firstPlayerId;
+    showMessage("생산 단계가 끝났습니다. 이제 화합물을 판매하세요.", render);
+}
+
+function canPlayerSellCard(player, card) {
+    if (!player || !card) return false;
+    
+    let ownedElements = 0;
+    card.elements.forEach(elNum => {
+        if (player.cubesOnBoard.includes(elNum)) {
+            ownedElements++;
+        }
+    });
+
+    if (ownedElements === card.elements.length) return true;
+
+    if (player.tech.includes('outsource') && !player.usedOutsource && card.elements.length > 1) {
+        let needed = [];
+        card.elements.forEach(elNum => {
+            if (!player.cubesOnBoard.includes(elNum)) needed.push(elNum);
+        });
+        if (needed.length === 1 && gameState.players.some(p => p.id !== player.id && p.cubesOnBoard.includes(needed[0]))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+async function handleSellCard(event) {
+    const cardId = event.target.dataset.cardId;
+    const cardType = event.target.dataset.cardType;
+    const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+    
+    const market = gameState.market[cardType];
+    const cardIndex = market.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+    const card = market[cardIndex];
+
+    if (canPlayerSellCard(player, card)) {
+        const ownedCount = card.elements.filter(el => player.cubesOnBoard.includes(el)).length;
+        if (ownedCount < card.elements.length) {
+            player.usedOutsource = true;
+        }
+
+        const oldScore = player.score;
+        player.score += card.score;
+        player.soldCards.push(card);
+
+        market.splice(cardIndex, 1);
+        const deck = gameState.decks[cardType];
+        if (deck.length > 0) market.push(deck.shift());
+
+        await showMessageAndWait(`${player.name}님이 '${card.name}' 카드를 판매하여 ${card.score}점을 획득했습니다! (총 ${player.score}점)`);
+        
+        await checkScoreMilestones(player, oldScore);
+        
+        if (gameState.gameOver) return;
+        handleEndTurn();
+    }
+}
+
+async function checkScoreMilestones(player, oldScore) {
+    for (const score of diceRewards) {
+        if (oldScore < score && player.score >= score && !player.scoreMilestones.dice.includes(score)) {
+            player.scoreMilestones.dice.push(score);
+            if (player.dice.length < 7) {
+                const availableDice = allDiceTypes.filter(d => !player.dice.includes(d));
+                if (availableDice.length > 0) {
+                    const chosenDie = await new Promise(resolve => {
+                        openChoiceModal({
+                            title: `주사위 획득! 원하는 주사위를 선택하세요.`,
+                            options: availableDice.map(d => ({ text: d, value: d })),
+                            isDice: true,
+                            onChoose: resolve
+                        });
+                    });
+                    player.dice.push(chosenDie);
+                    await showMessageAndWait(`${player.name}님이 ${score}점 보상으로 ${diceNames[chosenDie]} 주사위를 획득했습니다!`);
+                }
+            }
+        }
+    }
+
+    for (const score of techRewards) {
+        if (oldScore < score && player.score >= score && !player.scoreMilestones.tech.includes(score)) {
+            player.scoreMilestones.tech.push(score);
+            const availableTech = Object.values(technologies).filter(t => !player.tech.includes(t.id));
+            if (availableTech.length > 0) {
+                 const chosenTech = await new Promise(resolve => {
+                        openChoiceModal({
+                            title: `기술 획득! 원하는 기술을 선택하세요.`,
+                            options: availableTech.map(t => ({ text: t.name, value: t.id })),
+                            onChoose: resolve
+                        });
+                    });
+                player.tech.push(chosenTech);
+                await showMessageAndWait(`${player.name}님이 ${score}점 보상으로 '${technologies[chosenTech].name}' 기술을 획득했습니다!`);
+            }
+        }
+    }
+
+    if (player.score >= 50 && !gameState.isEnding) {
+        gameState.isEnding = true;
+        await showMessageAndWait(`이번 라운드가 마지막 라운드입니다! ${player.name}님이 50점을 돌파했습니다!`);
+    }
+}
+
+function showMessageAndWait(text) {
+    return new Promise(resolve => showMessage(text, resolve));
+}
+
+function handleEndTurn() {
+    if (gameState.gameOver) return;
+
+    let nextPlayerId = (gameState.currentPlayerId + 1) % gameState.players.length;
+    gameState.currentPlayerId = nextPlayerId;
+
+    if (gameState.currentPlayerId === gameState.firstPlayerId) {
+        if (gameState.isEnding) {
+            endGame();
+        } else {
+            gameState.round++;
+            gameState.firstPlayerId = (gameState.firstPlayerId + 1) % gameState.players.length;
+            startProductionPhase();
+        }
+    } else {
+        render();
+    }
+}
+
+function endGame() {
+    gameState.gameOver = true;
+
+    gameState.players.forEach(player => {
+        const soldElements = new Set();
+        player.soldCards.forEach(card => {
+            card.elements.forEach(elNum => {
+                const group = periodicTableData[elNum]?.group;
+                if (group) soldElements.add(group);
+            });
+        });
+        player.elementColorCount = soldElements.size;
+        const bonus = Math.max(0, player.elementColorCount - 2);
+        player.finalScore = player.score + bonus;
+    });
+
+    gameState.players.sort((a, b) => {
+        if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+        
+        const advancedCountB = b.soldCards.filter(c => c.type === 'advanced').length;
+        const advancedCountA = a.soldCards.filter(c => c.type === 'advanced').length;
+        if (advancedCountB !== advancedCountA) return advancedCountB - advancedCountA;
+        
+        if (b.elementColorCount !== a.elementColorCount) return b.elementColorCount - a.elementColorCount;
+
+        return b.dice.length - a.dice.length;
+    });
+
+    app.finalScores.innerHTML = gameState.players.map((p, index) => {
+        const bonus = Math.max(0, p.elementColorCount - 2);
+        return `
+            <div class="p-3 rounded ${index === 0 ? 'bg-accent-amber text-bg-dark' : 'bg-bg-dark text-text-primary'}">
+                <p class="text-xl font-bold">${index + 1}위: ${p.name} - ${p.finalScore}점</p>
+                <p class="text-sm">카드 점수 ${p.score}점 + 원소 종류 보너스 ${bonus}점</p>
+            </div>
+        `;
+    }).join('');
+    app.gameOverModal.classList.remove('hidden');
+}
+
+// --- INITIALIZATION ---
+function setupInitialUI() {
+    buildCoordinateMap();
+    for (let i = 2; i <= 6; i++) {
+        const button = document.createElement('button');
+        button.className = 'btn btn-secondary';
+        button.textContent = `${i}명`;
+        button.dataset.count = i;
+        app.playerCountSelector.appendChild(button);
+    }
+
+    app.playerCountSelector.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            const count = e.target.dataset.count;
+            gameState.playerCount = parseInt(count);
+            
+            app.playerCountSelector.querySelectorAll('button').forEach(btn => {
+                btn.classList.remove('btn-primary', 'bg-accent-cyan');
+                btn.classList.add('btn-secondary');
+            });
+            e.target.classList.remove('btn-secondary');
+            e.target.classList.add('btn-primary', 'bg-accent-cyan');
+
+            app.startGameBtn.disabled = false;
+        }
+    });
+
+    app.startGameBtn.addEventListener('click', initGame);
+
+    // Dev Tools
+    app.toggleDevPanelBtn.addEventListener('click', () => {
+        app.devPanel.classList.toggle('hidden');
+    });
+
+    document.getElementById('dev-add-score').addEventListener('click', () => {
+        const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        if (player) {
+            const oldScore = player.score;
+            player.score += 5;
+            checkScoreMilestones(player, oldScore);
+            render();
+        }
+    });
+
+    document.getElementById('dev-add-die').addEventListener('click', () => {
+        const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        if (player && player.dice.length < 7) {
+            const availableDice = allDiceTypes.filter(d => !player.dice.includes(d));
+            if (availableDice.length > 0) {
+                player.dice.push(availableDice[0]);
+                render();
+            }
+        }
+    });
+
+    document.getElementById('dev-add-tech').addEventListener('click', () => {
+        const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        if (player) {
+            const availableTech = Object.values(technologies).filter(t => !player.tech.includes(t.id));
+            if (availableTech.length > 0) {
+                player.tech.push(availableTech[0].id);
+                render();
+            }
+        }
+    });
+    
+    document.getElementById('dev-add-cube').addEventListener('click', () => {
+        const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        const numInput = document.getElementById('dev-element-num');
+        const num = parseInt(numInput.value);
+        if (player && num > 0 && num <= 118) {
+            if (!player.cubesOnBoard.includes(num)) {
+                if (player.cubesOnBoard.length >= 6) {
+                    player.cubesOnBoard.shift(); 
+                }
+                player.cubesOnBoard.push(num);
+                numInput.value = ''; 
+                render();
+            }
+        }
+    });
+
+    app.tableContainer.addEventListener('click', (e) => {
+        const cell = e.target.closest('.explosion-choice');
+        if (cell) {
+            const num = parseInt(cell.dataset.atomicNumber);
+            const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+            
+            if (player.cubesOnBoard.length >= 6) {
+                openChoiceModal({
+                    title: '큐브 교체: 어느 큐브를 옮기시겠습니까?',
+                    options: player.cubesOnBoard.map(n => ({ text: `${periodicTableData[n].symbol} (${periodicTableData[n].name})`, value: n })),
+                    onChoose: (toRemove) => {
+                        player.cubesOnBoard = player.cubesOnBoard.filter(n => n !== toRemove);
+                        player.cubesOnBoard.push(num);
+                        advanceProductionTurn();
+                    }
+                });
+            } else {
+                player.cubesOnBoard.push(num);
+                advanceProductionTurn();
+            }
+        }
+    });
+    
+    function hideCurrentModal(modalId) {
+        gameState.hiddenModalId = modalId;
+        document.getElementById(modalId).classList.add('hidden');
+        app.returnToModalBtn.classList.remove('hidden');
+    }
+    
+    function showHiddenModal() {
+        if(gameState.hiddenModalId) {
+            document.getElementById(gameState.hiddenModalId).classList.remove('hidden');
+            app.returnToModalBtn.classList.add('hidden');
+            gameState.hiddenModalId = null;
+        }
+    }
+    
+    document.getElementById('view-market-calc-btn').addEventListener('click', () => hideCurrentModal('calculation-modal'));
+    document.getElementById('view-market-choice-btn').addEventListener('click', () => hideCurrentModal('choice-modal'));
+    app.returnToModalBtn.addEventListener('click', showHiddenModal);
+}
+
+window.onload = () => {
+    setupInitialUI();
+    app.setupModal.classList.remove('hidden');
+};
+</script>
+
+</body>
+</html>
